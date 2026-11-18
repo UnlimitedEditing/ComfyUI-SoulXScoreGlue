@@ -64,24 +64,49 @@ class SoulXScoreTarget:
 
 
 class SoulXPromptVoice:
+    """The reference voice. With no audio it is the built-in example voice; with a clean sung clip it is a clone of that
+    singer (metadata is built from the audio itself: pitch tracking -> notes -> one syllable per note)."""
+
     @classmethod
     def INPUT_TYPES(cls):
-        return {"required": {"voice": (["en_prompt"], {"default": "en_prompt"})}}
+        return {"required": {"voice": (["en_prompt"], {"default": "en_prompt"}),
+                             "lyrics": ("STRING", {"default": "la"})},
+                "optional": {"audio": ("AUDIO",)}}
 
-    RETURN_TYPES = ("AUDIO", "STRING")
-    RETURN_NAMES = ("prompt_audio", "prompt_metadata_path")
+    RETURN_TYPES = ("AUDIO", "STRING", "STRING")
+    RETURN_NAMES = ("prompt_audio", "prompt_metadata_path", "info")
     FUNCTION = "run"
     CATEGORY = "SoulX-Singer"
 
-    def run(self, voice):
+    def run(self, voice, lyrics="la", audio=None):
         import numpy as np
         import soundfile as sf
         import torch
+        if audio is not None and audio.get("waveform") is not None and audio["waveform"].numel() > 0:
+            import json
+            import librosa
+            from . import prompt as _prompt
+            _ensure_nltk()
+            w = audio["waveform"][0].detach().cpu().numpy().astype(np.float32)   # [C, T]
+            y = w.mean(axis=0)
+            sr = int(audio["sample_rate"])
+            if sr != _prompt.SR:
+                y = librosa.resample(y, orig_sr=sr, target_sr=_prompt.SR)
+            peak = float(np.abs(y).max()) or 1.0
+            y = y / peak * 0.9
+            meta, yy = _prompt.build_prompt_metadata(y, _prompt.SR, lyrics or "la")
+            path = os.path.join(_temp_dir(), "prompt_from_audio.json")
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump([meta], f, ensure_ascii=False)
+            out = {"waveform": torch.from_numpy(np.ascontiguousarray(yy.astype(np.float32)))[None, None], "sample_rate": _prompt.SR}
+            info = f"cloned reference: {len(yy) / _prompt.SR:.1f}s, notes {meta['note_pitch']}"
+            print(f"[SoulXPromptVoice] {info}")
+            return (out, path, info)
         wav = os.path.join(_HERE, "voices", f"{voice}.wav")
         meta = os.path.join(_HERE, "voices", f"{voice}.json")
         y, sr = sf.read(wav, dtype="float32", always_2d=True)
-        audio = {"waveform": torch.from_numpy(np.ascontiguousarray(y.T))[None], "sample_rate": int(sr)}
-        return (audio, meta)
+        out = {"waveform": torch.from_numpy(np.ascontiguousarray(y.T))[None], "sample_rate": int(sr)}
+        return (out, meta, f"built-in voice {voice}")
 
 
 NODE_CLASS_MAPPINGS = {"SoulX Score Target": SoulXScoreTarget, "SoulX Prompt Voice": SoulXPromptVoice}
