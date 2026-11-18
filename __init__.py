@@ -42,6 +42,7 @@ class SoulXScoreTarget:
                       "_:0:1 neon:62:1 lights:64:1 are:66:0.5 call:67:0.5 ing:66:1 me:62:1 home:69:2 _:0:1"}),
             "bpm": ("FLOAT", {"default": 124.0, "min": 40.0, "max": 240.0, "step": 0.01}),
             "start_seconds": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 3600.0, "step": 0.01}),
+            "example_target": ("STRING", {"default": "none"}),
         }}
 
     RETURN_TYPES = ("STRING", "FLOAT", "STRING")
@@ -49,7 +50,12 @@ class SoulXScoreTarget:
     FUNCTION = "run"
     CATEGORY = "SoulX-Singer"
 
-    def run(self, score, bpm, start_seconds):
+    def run(self, score, bpm, start_seconds, example_target="none"):
+        if example_target and example_target.strip().lower() != "none":
+            # a SoulX-Singer shipped example (real singing metadata) for A/B quality checks of the model itself
+            p = os.path.join(_HERE, "voices", f"{example_target.strip()}.json")
+            print(f"[SoulXScoreTarget] using shipped example target {p}")
+            return (p, 0.0, f"example target {example_target}")
         _ensure_nltk()
         path, end = _score.write_metadata(score, bpm, start_seconds, _temp_dir(), "target")
         info = f"segments written to {path}; line ends at {end:.2f}s"
