@@ -3,6 +3,7 @@
 Score text: whitespace-separated notes, each  word:midi:beats
     neon:62:1  lights:64:1  are:66:0.5  home:67:2  _:0:1  -:69:1
   word   an English word (phonemes come from g2p_en)
+  word[K-AO1-L]  optional: spell the pronunciation yourself with ARPAbet phonemes joined by - (e.g. call[K-AO1-L])
   _      a rest (midi ignored)
   -      hold: repeat the previous word on a new note (a held / melisma note)
   midi   MIDI note number (60 = middle C)
@@ -36,6 +37,10 @@ def parse_score(text):
         if len(parts) < 3:
             raise ValueError(f"bad note '{tok}': expected word:midi:beats")
         word, midi, beats = parts[0], int(float(parts[1])), float(parts[2])
+        override = None
+        m = re.match(r"^(.*?)\[([A-Za-z0-9-]+)\]$", word)      # word[K-AO1-L]: spell the pronunciation yourself (ARPAbet)
+        if m:
+            word, override = m.group(1), "en_" + m.group(2).upper()
         if word == "_":
             notes.append({"text": "<SP>", "phoneme": "<SP>", "pitch": 0, "type": 1, "beats": beats})
         elif word == "-":
@@ -43,7 +48,7 @@ def parse_score(text):
                 raise ValueError("'-' (hold) cannot start a score")
             notes.append({"text": prev["text"], "phoneme": prev["phoneme"], "pitch": midi, "type": 3, "beats": beats})
         else:
-            ph = _phonemes(word.lower())
+            ph = override or _phonemes(word.lower())
             if ph is None:
                 raise ValueError(f"no phonemes for '{word}'")
             n = {"text": word, "phoneme": ph, "pitch": midi, "type": 2, "beats": beats}
