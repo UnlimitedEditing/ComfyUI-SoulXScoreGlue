@@ -112,6 +112,20 @@ def build_prompt_metadata(y, sr=SR, lyrics="la", max_seconds=10.0, language="Eng
         y = y[a: a + int(max_seconds * sr)]
     f0 = track_f0(y, sr)
     notes = segment_notes(f0)
+    if notes:
+        # pyin sometimes jumps an octave on a note: pull outliers back toward the clip's median pitch (note AND curve)
+        med = float(np.median([p for _a, _b, p in notes]))
+        fixed = []
+        for a, b, p in notes:
+            shift = 0
+            while p + shift > med + 9:
+                shift -= 12
+            while p + shift < med - 9:
+                shift += 12
+            if shift:
+                f0[a:b] = f0[a:b] * (2.0 ** (shift / 12.0))
+            fixed.append((a, b, p + shift))
+        notes = fixed
     if not notes:
         raise ValueError("no sung notes found in the reference clip: use a clean, unaccompanied singing clip")
     words = [w for w in re.split(r"\s+", lyrics.strip()) if w] or ["la"]

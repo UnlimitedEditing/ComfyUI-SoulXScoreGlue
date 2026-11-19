@@ -99,6 +99,8 @@ def build_segments(text, bpm, start_seconds=0.0, max_segment_seconds=8.0, langua
         f0 = (f0 + [0.0] * frames)[:frames]
         start_ms = int(round(seg[0]["t0"] * 1000))
         end_ms = start_ms + int(round(total * 1000))
+        if seg is segs[-1]:
+            end_ms += 600   # buffer headroom: the synthesizer can run a few frames long
         out.append({
             "index": f"vocal_{start_ms}_{end_ms}",
             "language": language,
